@@ -114,7 +114,11 @@ class BootloaderComInterface:
         ):
             raise ProtocolError(f"Unexpected eFuse response: {response.hex()}")
 
-        assert chip.efuse_crc16_offset is not None
+        if chip.efuse_crc16_offset is None:
+            raise UnsupportedOperationError(
+                f"{chip.name}: efuse_register is set but efuse_crc16_offset is missing"
+            )
+
         return response[
             chip.efuse_crc16_offset : chip.efuse_crc16_offset + EFUSE_CRC16_SIZE
         ]

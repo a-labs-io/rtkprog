@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import os
 from pathlib import Path
 from struct import pack
 
@@ -16,7 +17,7 @@ from .exceptions import (
 )
 from .serial import SerialInterface
 
-_FW_DIR: Path = Path(__file__).parent.parent / "fw"
+_FW_DIR: Path = Path(os.environ.get("RTKPROG_FW_DIR", Path(__file__).parent.parent / "fw"))
 
 _HCI_START_FW_LOADER_PREFIX: bytes = b"\x01\x62\xfc\x09\x20"
 _START_FW_LOADER_RESPONSE_HEADER: bytes = b"\x04\x0e\x04\x02\x62\xfc"

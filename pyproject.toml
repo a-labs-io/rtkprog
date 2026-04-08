@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-rtkprog = "rtk.cli:main"
+rtkprog = "rtkprog.cli:main"
 
 [build-system]
 requires = ["hatchling"]

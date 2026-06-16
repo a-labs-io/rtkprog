@@ -6,10 +6,21 @@ from .rtl8752h import RTL8752H
 from .rtl8762c import RTL8762C
 from .rtl8762g import RTL8762G
 
-CHIP_REGISTRY: dict[bytes, ChipConfig] = {
-    RTL8762C.init_response: RTL8762C,
-    RTL8762G.init_response: RTL8762G,
-    RTL8752H.init_response: RTL8752H,
+_CHIPS: tuple[ChipConfig, ...] = (RTL8762C, RTL8762G, RTL8752H)
+
+# Primary lookup by chip ID
+CHIP_REGISTRY: dict[int, ChipConfig] = {chip.chip_id: chip for chip in _CHIPS}
+
+# Fallback lookup by magic word
+MAGIC_WORD_REGISTRY: dict[int, ChipConfig] = {
+    chip.magic_word: chip for chip in _CHIPS if chip.magic_word is not None
 }
 
-__all__ = ["ChipConfig", "CHIP_REGISTRY", "RTL8762C", "RTL8762G", "RTL8752H"]
+__all__ = [
+    "ChipConfig",
+    "CHIP_REGISTRY",
+    "MAGIC_WORD_REGISTRY",
+    "RTL8762C",
+    "RTL8762G",
+    "RTL8752H",
+]

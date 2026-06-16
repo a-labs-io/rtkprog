@@ -9,8 +9,11 @@ class ChipConfig:
     # Name of the Chip
     name: str
 
-    # Probe response
-    init_response: bytes
+    # Chip ID (last byte of the probe response)
+    chip_id: int
+
+    # Fallback for chip identification, magic word read from ROM address 0x00032000
+    magic_word: int | None
 
     # Firmware loader files (filenames only, resolved against the fw/ directory)
     loader_firmware_files: tuple[str, ...]

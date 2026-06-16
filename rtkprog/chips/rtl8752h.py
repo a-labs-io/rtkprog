@@ -5,7 +5,8 @@ from .base import ChipConfig
 
 RTL8752H = ChipConfig(
     name="RTL8752H",
-    init_response=b"\x04\x0e\x08\x02\x61\xfc\x00\x01\x91\x20\x46",
+    chip_id=0x1F,
+    magic_word=0x46209101,
     loader_firmware_files=("RTL8762H_FW_A.bin", "flash_avl.bin"),
     flash_start=0x00801000,
     flash_end=0x00880000,

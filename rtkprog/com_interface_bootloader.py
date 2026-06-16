@@ -2,41 +2,42 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-import os
+import struct
 from pathlib import Path
-from struct import pack
 
 from crccheck.crc import CrcArc
 
-from .chips import CHIP_REGISTRY, ChipConfig
+from .chips import CHIP_REGISTRY, MAGIC_WORD_REGISTRY, ChipConfig
 from .exceptions import (
     CRCError,
     ProtocolError,
     UnknownChipError,
     UnsupportedOperationError,
 )
+from .hci import (
+    EVENT_PREFIX_LENGTH,
+    CommandCompleteEvent,
+    HciCommand,
+    HciEventStatus,
+    OpCode,
+    RegType,
+)
 from .serial import SerialInterface
 
-_FW_DIR: Path = Path(os.environ.get("RTKPROG_FW_DIR", Path(__file__).parent.parent / "fw"))
+_FW_DIR: Path = Path(__file__).parent.parent / "fw"
 
-_HCI_START_FW_LOADER_PREFIX: bytes = b"\x01\x62\xfc\x09\x20"
-_START_FW_LOADER_RESPONSE_HEADER: bytes = b"\x04\x0e\x04\x02\x62\xfc"
+# Magic word ROM address (fallback chip detection method)
+_MAGIC_WORD_ADDRESS: int = 0x00032000
+
+# Firmware-loader download
+LOADER_CHUNK_SIZE: int = 0xFC  # 252 bytes per frame
+
 _START_FW_LOADER_RESPONSE_LENGTH: int = 93
+_MP_PAYLOAD_OFFSET: int = 6
 _EUID_OFFSET: int = 69
 _EUID_LENGTH: int = 14
 
-# Chip probe
-INIT_PROBE_TX: bytes = b"\x01\x61\xfc\x05\x20\x00\x20\x03\x00"
-INIT_PROBE_RX_LENGTH: int = 11
-
-# Firmware-loader
-HCI_OPCODE_WRITE_RAM: bytes = b"\x01\x20\xfc"
-LOADER_CHUNK_SIZE: int = 0xFC  # 252 bytes per frame
-LOADER_FRAME_ACK_HEADER: bytes = b"\x04\x0e\x05\x02\x20\xfc\x00"
-
 # eFuse
-EFUSE_RESPONSE_LENGTH: int = 11
-EFUSE_RESPONSE_PREFIX: bytes = b"\x04\x0e\x08\x02\x61\xfc\x00\xff"
 EFUSE_CRC16_UNBURNED: bytes = b"\xff\xff"
 EFUSE_CRC16_SIZE: int = 2
 
@@ -51,15 +52,66 @@ class BootloaderComInterface:
         self._transport = transport
         self._log = logging.getLogger("rtkprog.bootloader")
 
+    def _send_command(
+        self, opcode: OpCode | int, params: bytes = b""
+    ) -> CommandCompleteEvent:
+        # Send HCI command and read back its command complete event
+        self._transport.transmit(bytes(HciCommand(opcode, params)))
+        return self._read_command_complete()
+
+    def _read_command_complete(self) -> CommandCompleteEvent:
+        prefix = self._transport.receive(EVENT_PREFIX_LENGTH)
+        if len(prefix) == 0:
+            raise ProtocolError(f"No response received")
+        if len(prefix) < EVENT_PREFIX_LENGTH:
+            raise ProtocolError(f"Too few bytes received: {len(prefix)}/{EVENT_PREFIX_LENGTH}")
+        params = self._transport.receive(prefix[-1]) # params length
+        return CommandCompleteEvent.parse(prefix + params)
+
     def probe_chip(self) -> ChipConfig:
         self._log.info("Probing chip")
-        self._transport.transmit(INIT_PROBE_TX)
-        response = self._transport.receive(INIT_PROBE_RX_LENGTH)
-        chip = CHIP_REGISTRY.get(response)
+
+        chip_id = self._read_chip_id()
+        if chip_id is not None:
+            chip = CHIP_REGISTRY.get(chip_id)
+            if chip is None:
+                raise UnknownChipError(f"Unsupported chip ID: 0x{chip_id:02X}")
+            self._log.info("Detected %s (chip ID: 0x%02X)", chip.name, chip_id)
+            return chip
+
+        # Reading chip id returned IC_TYPE_ERR, using magic-word fallback
+        magic_word = self._read_magic_word()
+        chip = MAGIC_WORD_REGISTRY.get(magic_word)
         if chip is None:
-            raise UnknownChipError(f"Unrecognised chip init response: {response.hex()}")
-        self._log.info("Detected: %s", chip.name)
+            raise UnknownChipError(f"Unrecognised magic word: 0x{magic_word:08X}")
+        self._log.info("Detected %s (magic word 0x%08X)", chip.name, magic_word)
         return chip
+
+    def _read_chip_id(self) -> int | None:
+        event = self._send_command(OpCode.READ_RTK_CHIP_ID)
+        if event.opcode != OpCode.READ_RTK_CHIP_ID:
+            raise ProtocolError(
+                f"Unexpected reply to read chip ID: {event.raw.hex()}"
+            )
+        if event.status == HciEventStatus.IC_TYPE_ERR:
+            self._log.debug("Read chip ID returned IC_TYPE_ERR")
+            return None
+        if event.status != HciEventStatus.SUCCESS:
+            raise ProtocolError(
+                f"Read chip ID failed with status 0x{event.status:02X}"
+            )
+        if not event.return_params:
+            raise ProtocolError(f"Read chip ID returned no id: {event.raw.hex()}")
+        return event.return_params[0]
+
+    def _read_magic_word(self) -> int:
+        # Fallback chip detection by reading magic word at 0x00032000
+        params = struct.pack("<BI", RegType.NORMAL, _MAGIC_WORD_ADDRESS)
+        self._transport.serial.reset_input_buffer()
+        event = self._send_command(OpCode.VENDOR_READ, params).check(OpCode.VENDOR_READ)
+        if len(event.return_params) < 4:
+            raise ProtocolError(f"Magic word read too short: {event.raw.hex()}")
+        return int.from_bytes(event.return_params[:4], "little")
 
     def upload_firmware_loader(self, chip: ChipConfig) -> None:
         self._log.info("Uploading firmware loader")
@@ -68,32 +120,29 @@ class BootloaderComInterface:
         )
         for frame_index, offset in enumerate(range(0, len(firmware), LOADER_CHUNK_SIZE)):
             chunk = firmware[offset : offset + LOADER_CHUNK_SIZE]
-            frame_byte = pack("B", frame_index & 0xFF)
-            packet = HCI_OPCODE_WRITE_RAM + pack("B", len(chunk) + 1) + frame_byte + chunk
-            expected_ack = LOADER_FRAME_ACK_HEADER + frame_byte
+            frame_byte = bytes((frame_index & 0xFF,))
 
-            self._transport.transmit(packet)
-            ack = self._transport.receive(len(expected_ack))
-            if ack != expected_ack:
+            event = self._send_command(
+                OpCode.LOAD_FIRMWARE, frame_byte + chunk
+            ).check(OpCode.LOAD_FIRMWARE)
+            if event.return_params[:1] != frame_byte:
                 raise ProtocolError(
-                    f"Loader frame {frame_index}: unexpected ack {ack.hex()}"
+                    f"Loader frame {frame_index}: ack echoed wrong fragment number "
+                    f"{event.return_params[:1].hex()}"
                 )
 
     def start_firmware_loader(self, chip: ChipConfig) -> None:
         self._log.info("Starting firmware loader")
-        request = _HCI_START_FW_LOADER_PREFIX + chip.fw_loader_params
-        self._transport.transmit(request)
+        params = bytes((RegType.NORMAL,)) + chip.fw_loader_params
+        self._transport.transmit(bytes(HciCommand(OpCode.VENDOR_WRITE, params)))
+
         response = self._transport.receive(_START_FW_LOADER_RESPONSE_LENGTH)
+        if CommandCompleteEvent.parse(response).opcode != OpCode.VENDOR_WRITE:
+            raise ProtocolError(f"Unexpected firmware loader response: {response.hex()}")
 
-        header_len = len(_START_FW_LOADER_RESPONSE_HEADER)
-        header, payload = response[:header_len], response[header_len:]
-
+        payload = response[_MP_PAYLOAD_OFFSET:]
         if CrcArc.calc(payload) != 0:
             raise CRCError("Firmware loader start response CRC mismatch")
-        if header != _START_FW_LOADER_RESPONSE_HEADER:
-            raise ProtocolError(
-                f"Unexpected firmware loader response header: {header.hex()}"
-            )
 
         euid = payload[_EUID_OFFSET : _EUID_OFFSET + _EUID_LENGTH]
         self._log.info("EUID: %s", " ".join(f"{b:02X}" for b in euid))
@@ -104,17 +153,10 @@ class BootloaderComInterface:
                 f"{chip.name} does not support eFuse operations"
             )
 
-        packet = b"\x01\x61\xfc\x05\x20" + pack("<I", chip.efuse_register)
-        self._transport.transmit(packet)
-        response = self._transport.receive(EFUSE_RESPONSE_LENGTH)
-
-        if (
-            len(response) != EFUSE_RESPONSE_LENGTH
-            or response[:8] != EFUSE_RESPONSE_PREFIX
-        ):
-            raise ProtocolError(f"Unexpected eFuse response: {response.hex()}")
+        params = struct.pack("<BI", RegType.NORMAL, chip.efuse_register)
+        event = self._send_command(OpCode.VENDOR_READ, params).check(OpCode.VENDOR_READ)
 
         assert chip.efuse_crc16_offset is not None
-        return response[
+        return event.raw[
             chip.efuse_crc16_offset : chip.efuse_crc16_offset + EFUSE_CRC16_SIZE
         ]

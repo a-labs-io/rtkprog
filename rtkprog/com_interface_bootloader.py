@@ -133,7 +133,12 @@ class BootloaderComInterface:
 
     def start_firmware_loader(self, chip: ChipConfig) -> None:
         self._log.info("Starting firmware loader")
-        params = bytes((RegType.NORMAL,)) + chip.fw_loader_params
+        params = struct.pack(
+            "<BII",
+            RegType.NORMAL,
+            chip.fw_loader_trigger_addr,
+            chip.fw_loader_trigger_value,
+        )
         self._transport.transmit(bytes(HciCommand(OpCode.VENDOR_WRITE, params)))
 
         response = self._transport.receive(_START_FW_LOADER_RESPONSE_LENGTH)

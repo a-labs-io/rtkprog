@@ -14,5 +14,6 @@ RTL8762C = ChipConfig(
     flash_address_mac=0x00801409,
     efuse_register=0x002028C8,
     efuse_crc16_offset=8,
-    fw_loader_params=b"\x34\x12\x20\x00\x31\x38\x20\x00",
+    fw_loader_trigger_addr=0x00201234,
+    fw_loader_trigger_value=0x00203831,
 )

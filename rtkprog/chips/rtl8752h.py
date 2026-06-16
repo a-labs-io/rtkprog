@@ -14,5 +14,6 @@ RTL8752H = ChipConfig(
     flash_address_mac=0x0080140B,
     efuse_register=None,
     efuse_crc16_offset=None,
-    fw_loader_params=b"\xcc\x0a\x20\x00\x31\x48\x20\x00",
+    fw_loader_trigger_addr=0x00200ACC,
+    fw_loader_trigger_value=0x00204831,
 )

@@ -31,8 +31,9 @@ class ChipConfig:
     # Offset in eFuse response where the 2-byte CRC16 starts, None if not supported
     efuse_crc16_offset: int | None
 
-    # Chip-specific parameter bytes for the start FW loader command
-    fw_loader_params: bytes
+    # Chip-specific trigger address / value for starting the FW loader
+    fw_loader_trigger_addr: int
+    fw_loader_trigger_value: int
 
     @property
     def flash_size(self) -> int:

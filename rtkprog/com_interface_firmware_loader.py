@@ -10,7 +10,7 @@ from crccheck.crc import CrcArc
 
 from .bluetooth_mac import BluetoothMAC
 from .chips import ChipConfig
-from .exceptions import CRCError, ProtocolError
+from .exceptions import CRCError, ProtocolError, UnsupportedOperationError
 from .serial import SerialInterface
 
 
@@ -103,10 +103,18 @@ class FirmwareLoaderComInterface:
     def write(self, address: int, data: bytes) -> None:
         self._write_pages(address, data)
 
+    def _flash_address_mac(self) -> int:
+        if self._chip.flash_address_mac is None:
+            raise UnsupportedOperationError(
+                f"MAC address operations not supported for {self._chip.name} (yet)"
+            )
+        return self._chip.flash_address_mac
+
     def read_mac(self) -> BluetoothMAC:
+        flash_address_mac = self._flash_address_mac()
         page_size = self._chip.flash_page_size
-        page_start = (self._chip.flash_address_mac // page_size) * page_size
-        page_offset = self._chip.flash_address_mac - page_start
+        page_start = (flash_address_mac // page_size) * page_size
+        page_offset = flash_address_mac - page_start
         page = self.read(page_start, page_size)
         return BluetoothMAC.from_reverse_bytes(page[page_offset : page_offset + 6])
 
@@ -146,9 +154,10 @@ class FirmwareLoaderComInterface:
         return self.read(self._chip.flash_start, self._chip.flash_size)
 
     def write_mac(self, mac: BluetoothMAC) -> None:
+        flash_address_mac = self._flash_address_mac()
         page_size = self._chip.flash_page_size
-        page_start = (self._chip.flash_address_mac // page_size) * page_size
-        page_offset = self._chip.flash_address_mac - page_start
+        page_start = (flash_address_mac // page_size) * page_size
+        page_offset = flash_address_mac - page_start
 
         self._log.info("Writing MAC %s", mac)
         page = bytearray(self.read(page_start, page_size))

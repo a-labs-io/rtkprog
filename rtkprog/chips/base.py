@@ -23,8 +23,8 @@ class ChipConfig:
     flash_end: int
     flash_page_size: int
 
-    # MAC address location in flash
-    flash_address_mac: int
+    # MAC address location in flash, None if MAC operations are not supported
+    flash_address_mac: int | None
 
     # eFuse register address, None if not supported
     efuse_register: int | None

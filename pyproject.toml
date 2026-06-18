@@ -17,6 +17,9 @@ rtkprog = "rtkprog.cli:main"
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+artifacts = ["rtkprog/fw/*.bin"]
+
 [tool.ruff]
 line-length = 90
 

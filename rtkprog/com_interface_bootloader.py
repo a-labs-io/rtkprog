@@ -3,7 +3,7 @@
 
 import logging
 import struct
-from pathlib import Path
+from importlib.resources import files as _pkg_files
 
 from crccheck.crc import CrcArc
 
@@ -24,7 +24,7 @@ from .hci import (
 )
 from .serial import SerialInterface
 
-_FW_DIR: Path = Path(__file__).parent.parent / "fw"
+_FW_RESOURCES = _pkg_files("rtkprog") / "fw"
 
 # Magic word ROM address (fallback chip detection method)
 _MAGIC_WORD_ADDRESS: int = 0x00032000
@@ -116,7 +116,7 @@ class BootloaderComInterface:
     def upload_firmware_loader(self, chip: ChipConfig) -> None:
         self._log.info("Uploading firmware loader")
         firmware = b"".join(
-            (_FW_DIR / name).read_bytes() for name in chip.loader_firmware_files
+            (_FW_RESOURCES / name).read_bytes() for name in chip.loader_firmware_files
         )
         for frame_index, offset in enumerate(range(0, len(firmware), LOADER_CHUNK_SIZE)):
             chunk = firmware[offset : offset + LOADER_CHUNK_SIZE]

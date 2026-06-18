@@ -1,6 +1,6 @@
 # rtkprog
 
-Tool for flashing Realtek RTL87x2x Bluetooth SoCs via UART
+Tool for flashing Realtek RTL87xxx Bluetooth SoCs via UART
 
 ## Installation / Dependencies
 
@@ -35,7 +35,7 @@ This tool supports auto-reset via serial RTS / DTR lines. This allows switching 
 ./rtkprog.py --help
 usage: rtkprog [-h] [-p PORT] [-b BAUD] [-v | -q] COMMAND ...
 
-Tool for programming Realtek RTL8762x BT SoCs
+Tool for programming Realtek RTL87xxx BT SoCs
 
 positional arguments:
   COMMAND

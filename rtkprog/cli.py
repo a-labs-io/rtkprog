@@ -33,6 +33,8 @@ from .validation import (
 
 def _contains_mac_addr_fully(address: int, size: int, chip: ChipConfig):
     flash_address_mac = chip.flash_address_mac
+    if flash_address_mac is None:
+        return False
     return (
         flash_address_mac >= address
         and flash_address_mac + BluetoothMAC.MAC_ADDRESS_SIZE <= address + size
@@ -56,6 +58,11 @@ def _cmd_write(
     log: Logger, args: WriteArgs, fw_loader: FirmwareLoaderComInterface, chip: ChipConfig
 ) -> None:
     mac_to_set = args.mac
+
+    if mac_to_set and chip.flash_address_mac is None:
+        raise ValidationError(
+            f"MAC address operations not supported for {chip.name} (yet)"
+        )
 
     # Build write plan for pre-flight validation
     write_plan: list[WritePlanEntry] = []
@@ -106,7 +113,13 @@ def _cmd_erase(args: EraseArgs, fw_loader: FirmwareLoaderComInterface) -> None:
         fw_loader.erase_all()
 
 
-def _cmd_mac(log: Logger, args: MacArgs, fw_loader: FirmwareLoaderComInterface) -> None:
+def _cmd_mac(
+    log: Logger, args: MacArgs, fw_loader: FirmwareLoaderComInterface, chip: ChipConfig
+) -> None:
+    if chip.flash_address_mac is None:
+        log.warning(f"MAC address operations not supported for {chip.name} (yet)")
+        return
+
     if args.mac:
         fw_loader.write_mac(args.mac)
     else:
@@ -167,7 +180,7 @@ def _run(global_args: GlobalArgs, cmd_args: CmdArgs, log: Logger) -> None:
             case EraseArgs():
                 _cmd_erase(cmd_args, fw_loader)
             case MacArgs():
-                _cmd_mac(log, cmd_args, fw_loader)
+                _cmd_mac(log, cmd_args, fw_loader, chip)
 
 
 def main() -> None:

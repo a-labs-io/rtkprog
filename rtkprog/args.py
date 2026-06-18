@@ -94,7 +94,7 @@ def _build_parser() -> ArgumentParser:
 
     parser = ArgumentParser(
         prog="rtkprog",
-        description="Tool for programming Realtek RTL87x2x BT SoCs",
+        description="Tool for programming Realtek RTL87xxx BT SoCs",
     )
 
     parser.add_argument(

@@ -4,11 +4,19 @@
 [project]
 name = "rtkprog"
 dynamic = ["version"]
+description = "Tool for flashing Realtek RTL87xxx Bluetooth SoCs via UART"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "A Labs GmbH" }]
 requires-python = ">=3.12"
 dependencies = [
     "crccheck>=1.3.1",
     "pyserial>=3.5",
 ]
+
+[project.urls]
+Homepage = "https://github.com/a-labs-io/rtkprog"
+Source = "https://github.com/a-labs-io/rtkprog"
 
 [project.scripts]
 rtkprog = "rtkprog.cli:main"

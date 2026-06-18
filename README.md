@@ -16,26 +16,6 @@ Using `pip`
 $ pip install -r requirements.txt
 ```
 
-## Firmware Blobs
-
-In order to be able to flash firmware, you need to get the firmware loader blobs from the official Realtek MPCLI tool [RealMCU website](https://www.realmcu.com) or from the [Realtek Zephyr project repository](https://github.com/rtkconnectivity/realtek-zephyr-project/tree/eef376419cfb40c0bef85a63e04d775687516796/tool/bin/bee/mpcli/fw).
-
-Once extracted to this tool's `fw/` directory, the structure should look like this (same level as `rtkprog.py`):
-
-```shell
-$ tree fw
-fw
-├── flash_avl.bin
-├── RTL8762C_FW_B.bin
-├── RTL8762D_FW_A.bin
-├── RTL8762E_FW_B.bin
-├── RTL8762G_FW_A.bin
-├── RTL8762G_FW_B.bin
-└── RTL8762H_FW_A.bin
-
-
-```
-
 ## Essential System Images
 
 Before being able to write and run Zephyr application images, some essential system images (such as Bootloader patches, System patches, and Configuration files) must be programmed in advance, which can be downloaded from Zephyr's [hal_realtek](https://github.com/rtkconnectivity/realtek-zephyr-project/tree/eef376419cfb40c0bef85a63e04d775687516796/bin) repository.
